@@ -1,7 +1,7 @@
 # OCI Interceptor
 
 An OCI runtime wrapper that modifies containers'
-[`config.json`](https://github.com/opencontainers/runtime-spec/blob/master/spec.md) according to
+[`config.json`](https://github.com/opencontainers/runtime-spec/blob/master/config.md) according to
 specified rules before forwarding the container to a real OCI runtime for creation.
 
 This can be used to enforce certain policies on created containers, or to work around limitations
