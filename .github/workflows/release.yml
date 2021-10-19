@@ -45,9 +45,9 @@ jobs:
           mkdir out
           cp target/release/oci-interceptor out/
           cp README.md LICENSE.md CHANGELOG.md out/
-          cd out && tar czf oci-interceptor_${rustc-target}.tar.gz *
+          cd out && tar czf oci-interceptor_${suffix}.tar.gz *
         env:
-          rustc-target: ${{ matrix.rustc-target }}
+          suffix: ${{ matrix.rustc-target }}
       - name: Upload tarball
         uses: softprops/action-gh-release@v1
         with:
