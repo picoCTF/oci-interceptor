@@ -12,5 +12,5 @@ publish = false
 
 [dependencies]
 anyhow = "1.0.50"
-clap = "2.33.3"
+clap = "2.34.0"
 oci-spec = { git = "https://github.com/containers/oci-spec-rs", rev = "e6b499b"}  # Relying on setters introduced in #76 but not released yet
