@@ -13,22 +13,22 @@ fn main() -> Result<()> {
         .about(crate_description!())
         .setting(AppSettings::TrailingVarArg)
         .setting(AppSettings::DontDelimitTrailingValues)
-        .setting(AppSettings::AllowLeadingHyphen)
+        .setting(AppSettings::AllowHyphenValues)
         .arg(
-            Arg::with_name("runtime-path")
+            Arg::new("runtime-path")
                 .long("--runtime-path")
                 .default_value("runc")
                 .help("Path to OCI runtime."),
         )
         .arg(
-            Arg::with_name("readonly-networking-mounts")
+            Arg::new("readonly-networking-mounts")
                 .long("--readonly-networking-mounts")
                 .takes_value(false)
                 .help("Whether to mount networking files as readonly."),
         )
         .arg(
-            Arg::with_name("runtime-options")
-                .multiple(true)
+            Arg::new("runtime-options")
+                .multiple_occurrences(true)
                 .allow_hyphen_values(true)
                 .help("All additional options will be forwarded to the OCI runtime."),
         )
