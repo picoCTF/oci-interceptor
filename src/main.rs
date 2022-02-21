@@ -1,19 +1,19 @@
 use anyhow::{Context, Result};
-use clap::{crate_authors, crate_description, crate_name, crate_version, App, AppSettings, Arg};
+use clap::{crate_authors, crate_description, crate_name, crate_version, Arg};
 use oci_spec::runtime::Spec;
 use std::{
     path::{Path, PathBuf},
-    process::Command,
+    process,
 };
 
 fn main() -> Result<()> {
-    let matches = App::new(crate_name!())
+    let matches = clap::Command::new(crate_name!())
         .version(crate_version!())
         .author(crate_authors!())
         .about(crate_description!())
-        .setting(AppSettings::TrailingVarArg)
-        .setting(AppSettings::DontDelimitTrailingValues)
-        .setting(AppSettings::AllowHyphenValues)
+        .trailing_var_arg(true)
+        .dont_delimit_trailing_values(true)
+        .allow_hyphen_values(true)
         .arg(
             Arg::new("runtime-path")
                 .long("--runtime-path")
@@ -80,7 +80,7 @@ fn get_bundle_path(options: &mut clap::Values) -> Option<PathBuf> {
 
 /// Calls the actual OCI runtime, passing along any runtime options.
 fn call_oci_runtime(runtime_path: &str, options: Vec<&str>) -> Result<i32> {
-    let mut child = Command::new(runtime_path)
+    let mut child = process::Command::new(runtime_path)
         .args(options.as_slice())
         .spawn()
         .with_context(|| "Failed to execute underlying OCI runtime")?;
