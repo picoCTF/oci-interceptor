@@ -12,5 +12,5 @@ publish = false
 
 [dependencies]
 anyhow = "1.0.56"
-clap = { version = "3.1.8", features = ["cargo"] }
+clap = { version = "3.1.9", features = ["cargo"] }
 oci-spec = "0.5.5"
