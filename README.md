@@ -10,6 +10,23 @@ in higher-level tools like Docker.
 Note that programs like Docker track their own container metadata, which may not accurately reflect
 these last-minute changes to the underlying OCI configuration.
 
+## Installation
+
+Download the latest [release](https://github.com/picoCTF/oci-interceptor/releases), extract the tarball, and copy the binary to an appropriate location:
+
+```bash
+$ tar xzf oci-interceptor_x86_64-unknown-linux-gnu.tar.gz
+$ cp oci-interceptor /usr/local/bin
+```
+
+Alternatively, build and install from source:
+
+```bash
+$ cargo install --locked --path .
+```
+
+Currently, prebuilt binaries are only available for x86 Linux (glibc-based). Other platforms must install from source.
+
 ## Usage
 
 ```bash
