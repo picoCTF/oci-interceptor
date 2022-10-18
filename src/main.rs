@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use clap::{crate_authors, crate_description, crate_name, crate_version, Arg};
+use clap::{crate_authors, crate_description, crate_name, crate_version, Arg, ArgAction};
 use oci_spec::runtime::Spec;
 use std::{
     path::{Path, PathBuf},
@@ -16,27 +16,29 @@ fn main() -> Result<()> {
         .allow_hyphen_values(true)
         .arg(
             Arg::new("runtime-path")
-                .long("--runtime-path")
+                .long("runtime-path")
                 .default_value("runc")
                 .help("Path to OCI runtime."),
         )
         .arg(
             Arg::new("readonly-networking-mounts")
-                .long("--readonly-networking-mounts")
-                .takes_value(false)
+                .long("readonly-networking-mounts")
+                .action(ArgAction::SetTrue)
                 .help("Whether to mount networking files as readonly."),
         )
         .arg(
             Arg::new("runtime-options")
-                .multiple_occurrences(true)
+                .action(ArgAction::Append)
                 .allow_hyphen_values(true)
                 .help("All additional options will be forwarded to the OCI runtime."),
         )
         .get_matches();
 
-    let runtime_options = matches
-        .values_of("runtime-options")
-        .with_context(|| "No OCI runtime options provided")?;
+    let runtime_options: Vec<String> = matches
+        .get_many::<String>("runtime-options")
+        .with_context(|| "No OCI runtime options provided")?
+        .cloned()
+        .collect();
 
     // We only want to intercept the runtime's "create" command (per the OCI runtime spec).
     //
@@ -53,14 +55,14 @@ fn main() -> Result<()> {
     if let Some(bundle_path) = get_bundle_path(&mut runtime_options.clone()) {
         let config_path = bundle_path.join("config.json");
 
-        if matches.is_present("readonly-networking-mounts") {
+        if matches.get_flag("readonly-networking-mounts") {
             modify_network_mounts(&config_path)?;
         }
     }
 
     std::process::exit(call_oci_runtime(
-        matches.value_of("runtime-path").unwrap(),
-        runtime_options.collect(),
+        matches.get_one::<String>("runtime-path").unwrap(),
+        runtime_options,
     )?);
 }
 
@@ -68,7 +70,8 @@ fn main() -> Result<()> {
 ///
 /// clap cannot handle parsing this because we don't know that --bundle will appear first in the
 /// list of options to forward to the runtime, and only trailing varargs can be captured.
-fn get_bundle_path(options: &mut clap::Values) -> Option<PathBuf> {
+fn get_bundle_path(options: &mut [String]) -> Option<PathBuf> {
+    let mut options = options.iter();
     if let Some(bundle_opt) = options.find(|s| s.starts_with("-b") || s.starts_with("--bundle")) {
         return match bundle_opt.split_once('=') {
             Some((_option, path)) => Some(PathBuf::from(path)),
@@ -79,7 +82,7 @@ fn get_bundle_path(options: &mut clap::Values) -> Option<PathBuf> {
 }
 
 /// Calls the actual OCI runtime, passing along any runtime options.
-fn call_oci_runtime(runtime_path: &str, options: Vec<&str>) -> Result<i32> {
+fn call_oci_runtime(runtime_path: &str, options: Vec<String>) -> Result<i32> {
     let mut child = process::Command::new(runtime_path)
         .args(options.as_slice())
         .spawn()
