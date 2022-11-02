@@ -29,17 +29,12 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v2
       - name: Set up Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          target: ${{ matrix.rustc-target }}
-          override: true
-          profile: minimal
+          targets: ${{ matrix.rustc-target }}
       - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: "--release"
+        run: |
+          cargo build --release
       - name: Create tarball
         run: |
           mkdir out

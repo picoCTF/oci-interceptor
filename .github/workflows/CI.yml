@@ -19,6 +19,7 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/**'
+  workflow_dispatch:
 
 jobs:
   ci:
@@ -29,18 +30,10 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v2
     - name: Set up Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
-        components: rustfmt, clippy
+      uses: dtolnay/rust-toolchain@stable
     - name: Run rustfmt
-      uses: actions-rs/cargo@v1
-      with:
-        command: fmt
-        args: "-- --check"
+      run: |
+        cargo fmt -- --check
     - name: Run clippy
-      uses: actions-rs/cargo@v1
-      with:
-        command: clippy
-        args: "-- -D warnings"
+      run: |
+        cargo clippy -- -D warnings
