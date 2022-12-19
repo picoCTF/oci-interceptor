@@ -11,6 +11,6 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.66"
+anyhow = "1.0.68"
 clap = { version = "4.0.29", features = ["cargo"] }
 oci-spec = "0.5.8"
