@@ -13,4 +13,4 @@ version = "0.1.0"
 [dependencies]
 anyhow = "1.0.68"
 clap = { version = "4.1.1", features = ["cargo"] }
-oci-spec = "0.5.8"
+oci-spec = "0.6.0"
