@@ -9,6 +9,8 @@ use std::{
 fn main() -> Result<()> {
     let matches = clap::Command::new(crate_name!())
         .version(crate_version!())
+        .disable_version_flag(true)
+        .disable_help_flag(true)
         .author(crate_authors!())
         .about(crate_description!())
         .trailing_var_arg(true)
@@ -31,6 +33,18 @@ fn main() -> Result<()> {
                 .action(ArgAction::Append)
                 .allow_hyphen_values(true)
                 .help("All additional options will be forwarded to the OCI runtime."),
+        )
+        .arg(
+            Arg::new("version")
+                .long("oci-interceptor-version")
+                .action(ArgAction::Version)
+                .help("Print version"),
+        )
+        .arg(
+            Arg::new("help")
+                .long("oci-interceptor-help")
+                .action(ArgAction::Help)
+                .help("Print help"),
         )
         .get_matches();
 
