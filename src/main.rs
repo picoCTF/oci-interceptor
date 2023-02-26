@@ -1,10 +1,10 @@
+mod networking_mounts;
+
 use anyhow::{Context, Result};
 use clap::{crate_authors, crate_description, crate_name, crate_version, Arg, ArgAction};
 use oci_spec::runtime::Spec;
-use std::{
-    path::{Path, PathBuf},
-    process,
-};
+use std::{path::PathBuf, process};
+use networking_mounts::modify_networking_mounts;
 
 fn main() -> Result<()> {
     let matches = clap::Command::new(crate_name!())
@@ -26,7 +26,19 @@ fn main() -> Result<()> {
             Arg::new("readonly-networking-mounts")
                 .long("oi-readonly-networking-mounts")
                 .action(ArgAction::SetTrue)
-                .help("Whether to mount networking files as readonly."),
+                .help("Mount networking files as readonly."),
+        )
+        .arg(
+            Arg::new("write-debug-output")
+                .long("oi-write-debug-output")
+                .action(ArgAction::SetTrue)
+                .help("Write debug output to --oi-debug-output-dir."),
+        )
+        .arg(
+            Arg::new("debug-output-dir")
+                .long("oi-debug-output-dir")
+                .default_value("/var/log/oci-interceptor")
+                .help("Debug output location when --oi-write-debug-output is enabled."),
         )
         .arg(
             Arg::new("version")
@@ -54,26 +66,32 @@ fn main() -> Result<()> {
         .cloned()
         .collect();
 
-    // We only want to intercept the runtime's "create" command (per the OCI runtime spec).
+    // Intercept "create" commands to the underlying OCI runtime
     //
     // As a heuristic, we look for the -b or --bundle flag in the provided options. This is not
     // defined in the spec, but is used by runc for its "create" and "run" commands and appears to
     // have been adopted by most(?) other runtimes for compatibility purposes.
-    //
-    // TODO: The runc "spec" command will probably cause an error if called with the -b or --bundle
-    // flag, since oci-interceptor will attempt to modify a config.json that does not yet exist.
-    // However, in practice this should usually not be a problem as Docker doesn't call this
-    // command. Eventually, we may want to do more involved introspection of the runtime options to
-    // decide whether container creation is occurring, though this may be difficult to do in a
-    // runtime-agnostic way since the spec does not enforce any specific CLI command design.
     if let Some(bundle_path) = get_bundle_path(&mut runtime_options.clone()) {
+        // Load initial OCI config
         let config_path = bundle_path.join("config.json");
+        let mut spec_modified = false;
+        let mut spec = Spec::load(&config_path)
+            .with_context(|| "Unable to parse OCI runtime specification")?;
 
+        // Make any enabled modifications
         if matches.get_flag("readonly-networking-mounts") {
-            modify_network_mounts(&config_path)?;
+            modify_networking_mounts(&mut spec);
+            spec_modified = true;
+        }
+
+        // Write the updated config back out to disk
+        if spec_modified {
+            spec.save(config_path)
+                .with_context(|| "Unable to write updated OCI runtime specification")?;
         }
     }
 
+    // Forward call to the underlying runtime
     std::process::exit(call_oci_runtime(
         matches.get_one::<String>("runtime-path").unwrap(),
         runtime_options,
@@ -108,38 +126,4 @@ fn call_oci_runtime(runtime_path: &str, options: Vec<String>) -> Result<i32> {
         Some(code) => Ok(code),
         None => Ok(-1), // child process was killed by a signal
     }
-}
-
-/// Modifies the mounts for these networking-related files:
-///
-/// - /etc/hosts
-/// - /etc/hostname
-/// - /etc/resolv.conf
-///
-/// in the container config, making them read-only.
-fn modify_network_mounts(config_path: &Path) -> Result<()> {
-    let mut spec =
-        Spec::load(config_path).with_context(|| "Unable to parse OCI runtime specification")?;
-    if let Some(mounts) = spec.mounts() {
-        let mut mounts = mounts.clone();
-        for mount in mounts.iter_mut() {
-            match mount.destination().to_str() {
-                Some("/etc/hosts") | Some("/etc/hostname") | Some("/etc/resolv.conf") => {
-                    if let Some(options) = mount.options() {
-                        if !options.contains(&"ro".into()) {
-                            let mut options = options.clone();
-                            options.push("ro".into());
-                            mount.set_options(Some(options));
-                        }
-                    }
-                }
-                Some(_) => {}
-                None => {}
-            }
-        }
-        spec.set_mounts(Some(mounts));
-        spec.save(config_path)
-            .with_context(|| "Unable to write updated OCI runtime specification")?;
-    }
-    Ok(())
 }
