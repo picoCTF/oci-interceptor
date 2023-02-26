@@ -18,33 +18,33 @@ fn main() -> Result<()> {
         .allow_hyphen_values(true)
         .arg(
             Arg::new("runtime-path")
-                .long("runtime-path")
+                .long("oi-runtime-path")
                 .default_value("runc")
                 .help("Path to OCI runtime."),
         )
         .arg(
             Arg::new("readonly-networking-mounts")
-                .long("readonly-networking-mounts")
+                .long("oi-readonly-networking-mounts")
                 .action(ArgAction::SetTrue)
                 .help("Whether to mount networking files as readonly."),
+        )
+        .arg(
+            Arg::new("version")
+                .long("oi-version")
+                .action(ArgAction::Version)
+                .help("Print version"),
+        )
+        .arg(
+            Arg::new("help")
+                .long("oi-help")
+                .action(ArgAction::Help)
+                .help("Print help"),
         )
         .arg(
             Arg::new("runtime-options")
                 .action(ArgAction::Append)
                 .allow_hyphen_values(true)
                 .help("All additional options will be forwarded to the OCI runtime."),
-        )
-        .arg(
-            Arg::new("version")
-                .long("oci-interceptor-version")
-                .action(ArgAction::Version)
-                .help("Print version"),
-        )
-        .arg(
-            Arg::new("help")
-                .long("oci-interceptor-help")
-                .action(ArgAction::Help)
-                .help("Print help"),
         )
         .get_matches();
 
