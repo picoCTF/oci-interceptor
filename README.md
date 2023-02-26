@@ -25,14 +25,16 @@ Alternatively, build and install from source:
 $ cargo install --locked --path .
 ```
 
-Currently, prebuilt binaries are only available for x86 Linux (glibc-based). Other platforms must install from source.
+Currently, prebuilt binaries are only available for x86 Linux (glibc-based). Other platforms must installed from source.
 
 ## Usage
 
+All `oci-interceptor` flags are prefixed with `--oi-` in order to avoid conflicts with the underlying OCI runtime.
+
 ```bash
 $ oci-interceptor \
-  [--runtime-path=runc] \
-  [--readonly-networking-mounts] \
+  [--oi-runtime-path=runc] \
+  [--oi-readonly-networking-mounts] \
   [...other flags forwarded to runtime]
 ```
 
@@ -43,7 +45,7 @@ configuration](https://docs.docker.com/engine/reference/commandline/dockerd/#dae
 must be modified to add this runtime. If you want it to be invoked every time a container is
 created, you should also make it the default runtime (instead of `runc`).
 
-If you are not using a custom OCI runtime like `crun` or `youki`, you can omit the `--runtime-path`
+If you are not using a custom OCI runtime like `crun` or `youki`, you can omit the `--oi-runtime-path`
 option, as it defaults to `runc`, the default runtime included with Docker.
 
 #### Example `/etc/docker/daemon.json` contents
@@ -55,8 +57,8 @@ option, as it defaults to `runc`, the default runtime included with Docker.
         "oci-interceptor": {
             "path": "/usr/local/bin/oci-interceptor",
             "runtimeArgs": [
-                "--runtime-path=runc",
-                "--readonly-networking-mounts"
+                "--oi-runtime-path=runc",
+                "--oi-readonly-networking-mounts"
             ]
         }
     }
@@ -78,7 +80,7 @@ size](https://github.com/moby/moby/pull/24771), these files provide an escape ha
 users to fill the graph storage volume. This can be circumvented by manually mounting readonly files
 over these paths, but in that case Docker can no longer manage the container's DNS configuration.
 
-To avoid this issue, specify the `--readonly-networking-mounts` flag, which automatically modifies
+To avoid this issue, specify the `--oi-readonly-networking-mounts` flag, which automatically modifies
 these mounts to be read-only, preventing writes from inside the container.
 
 ### Arbitrary modifications
