@@ -90,8 +90,11 @@ these mounts to be read-only, preventing writes from inside the container.
 
 ### Debug output
 
-Specify the `--oi-write-debug-output` flag to write original and modified container configs to the directory specified by `--oi-debug-output-dir` (default `/var/log/oci-interceptor`).
+Specify the `--oi-write-debug-output` flag to write original, parsed, and modified container configs to the directory specified by `--oi-debug-output-dir` (default `/var/log/oci-interceptor`).
 
-These files will have the format `<container_hostname>_original.json` and `<container_hostname>_modified.json`, with the latter only written if any modification occurred.
+These filenames will have the format:
+- `<container_hostname>_original.json` (the original config)
+- `<container_hostname>_parsed.json` (the parsed config)
+- `<container_hostname>_modified.json` (the modified config, only written if modification occurred)
 
 Additionally, forwarded calls to the underlying OCI runtime will be appended to the file `runtime_calls.txt` within this directory.
