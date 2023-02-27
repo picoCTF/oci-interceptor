@@ -87,14 +87,20 @@ fn main() -> Result<()> {
         let mut spec = Spec::load(&config_path)
             .with_context(|| "Unable to parse OCI runtime specification")?;
         if matches.get_flag("write-debug-output") {
-            let output_filename = spec
+            fs::create_dir_all(&debug_output_dir)?;
+            let hostname = spec
                 .hostname()
                 .clone()
-                .unwrap_or(String::from("unknown_hostname"))
-                + "_original.json";
-            fs::create_dir_all(&debug_output_dir)?;
-            let original_spec = fs::File::create(debug_output_dir.join(output_filename))?;
-            serde_json::to_writer_pretty(&original_spec, &spec)?;
+                .unwrap_or(String::from("unknown_hostname"));
+            let original_config: serde_json::Value =
+                serde_json::from_str(&fs::read_to_string(&config_path)?)?;
+            let original_filename = hostname.clone() + "_original.json";
+            let original_file = fs::File::create(debug_output_dir.join(original_filename))?;
+            serde_json::to_writer_pretty(&original_file, &original_config)?;
+
+            let parsed_filename = hostname + "_parsed.json";
+            let parsed_file = fs::File::create(debug_output_dir.join(parsed_filename))?;
+            serde_json::to_writer_pretty(&parsed_file, &spec)?;
         }
 
         // Make any enabled modifications
@@ -115,7 +121,7 @@ fn main() -> Result<()> {
                 let modified_spec = fs::File::create(debug_output_dir.join(output_filename))?;
                 serde_json::to_writer_pretty(&modified_spec, &spec)?;
             }
-            spec.save(config_path)
+            spec.save(&config_path)
                 .with_context(|| "Unable to write updated OCI runtime specification")?;
         }
     }
