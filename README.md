@@ -34,6 +34,8 @@ All `oci-interceptor` flags are prefixed with `--oi-` in order to avoid conflict
 ```bash
 $ oci-interceptor \
   [--oi-runtime-path=runc] \
+  [--oi-debug-output-dir=/var/log/oci-interceptor] \
+  [--oi-write-debug-output] \
   [--oi-readonly-networking-mounts] \
   [...other flags forwarded to runtime]
 ```
@@ -57,13 +59,16 @@ option, as it defaults to `runc`, the default runtime included with Docker.
         "oci-interceptor": {
             "path": "/usr/local/bin/oci-interceptor",
             "runtimeArgs": [
-                "--oi-runtime-path=runc",
                 "--oi-readonly-networking-mounts"
             ]
         }
     }
 }
 ```
+
+Even if you set `oci-interceptor` as the default runtime, you can still bypass it while running a container via `docker run --runtime=runc`.
+
+While it is not possible to override `runtimeArgs` using a `docker run` option, you could specify several different "runtimes" (with different `runtimeArgs`) and switch between them using `docker run --runtime=<name>`.
 
 ## Supported Customizations
 
@@ -83,7 +88,10 @@ over these paths, but in that case Docker can no longer manage the container's D
 To avoid this issue, specify the `--oi-readonly-networking-mounts` flag, which automatically modifies
 these mounts to be read-only, preventing writes from inside the container.
 
-### Arbitrary modifications
+### Debug output
 
-The intent of this project is to eventually support arbitrary modifications to `config.json` via a
-list of specified rules, but work on this has not yet begun.
+Specify the `--oi-write-debug-output` flag to write original and modified container configs to the directory specified by `--oi-debug-output-dir` (default `/var/log/oci-interceptor`).
+
+These files will have the format `<container_hostname>_original.json` and `<container_hostname>_modified.json`, with the latter only written if any modification occurred.
+
+Additionally, forwarded calls to the underlying OCI runtime will be appended to the file `runtime_calls.txt` within this directory.

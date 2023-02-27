@@ -14,3 +14,4 @@ version = "0.2.0"
 anyhow = "1.0.69"
 clap = { version = "4.1.6", features = ["cargo"] }
 oci-spec = "0.6.0"
+serde_json = "1.0.93"
