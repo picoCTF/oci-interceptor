@@ -2,9 +2,9 @@ mod networking_mounts;
 
 use anyhow::{Context, Result};
 use clap::{crate_authors, crate_description, crate_name, crate_version, Arg, ArgAction};
-use oci_spec::runtime::Spec;
-use std::{path::PathBuf, process};
 use networking_mounts::modify_networking_mounts;
+use oci_spec::runtime::Spec;
+use std::{fs, io::Write, path::PathBuf, process};
 
 fn main() -> Result<()> {
     let matches = clap::Command::new(crate_name!())
@@ -13,9 +13,7 @@ fn main() -> Result<()> {
         .disable_help_flag(true)
         .author(crate_authors!())
         .about(crate_description!())
-        .trailing_var_arg(true)
         .dont_delimit_trailing_values(true)
-        .allow_hyphen_values(true)
         .arg(
             Arg::new("runtime-path")
                 .long("oi-runtime-path")
@@ -55,16 +53,27 @@ fn main() -> Result<()> {
         .arg(
             Arg::new("runtime-options")
                 .action(ArgAction::Append)
+                .trailing_var_arg(true)
                 .allow_hyphen_values(true)
                 .help("All additional options will be forwarded to the OCI runtime."),
         )
         .get_matches();
+
+    let runtime_path = matches
+        .get_one::<String>("runtime-path")
+        .expect("No runtime path set");
 
     let runtime_options: Vec<String> = matches
         .get_many::<String>("runtime-options")
         .with_context(|| "No OCI runtime options provided")?
         .cloned()
         .collect();
+
+    let debug_output_dir = PathBuf::from(
+        matches
+            .get_one::<String>("debug-output-dir")
+            .expect("No debug output dir set"),
+    );
 
     // Intercept "create" commands to the underlying OCI runtime
     //
@@ -77,6 +86,16 @@ fn main() -> Result<()> {
         let mut spec_modified = false;
         let mut spec = Spec::load(&config_path)
             .with_context(|| "Unable to parse OCI runtime specification")?;
+        if matches.get_flag("write-debug-output") {
+            let output_filename = spec
+                .hostname()
+                .clone()
+                .unwrap_or(String::from("unknown_hostname"))
+                + "_original.json";
+            fs::create_dir_all(&debug_output_dir)?;
+            let original_spec = fs::File::create(debug_output_dir.join(output_filename))?;
+            serde_json::to_writer_pretty(&original_spec, &spec)?;
+        }
 
         // Make any enabled modifications
         if matches.get_flag("readonly-networking-mounts") {
@@ -86,16 +105,34 @@ fn main() -> Result<()> {
 
         // Write the updated config back out to disk
         if spec_modified {
+            if matches.get_flag("write-debug-output") {
+                let output_filename = spec
+                    .hostname()
+                    .clone()
+                    .unwrap_or(String::from("unknown_hostname"))
+                    + "_modified.json";
+                fs::create_dir_all(&debug_output_dir)?;
+                let modified_spec = fs::File::create(debug_output_dir.join(output_filename))?;
+                serde_json::to_writer_pretty(&modified_spec, &spec)?;
+            }
             spec.save(config_path)
                 .with_context(|| "Unable to write updated OCI runtime specification")?;
         }
     }
 
     // Forward call to the underlying runtime
-    std::process::exit(call_oci_runtime(
-        matches.get_one::<String>("runtime-path").unwrap(),
-        runtime_options,
-    )?);
+    if matches.get_flag("write-debug-output") {
+        fs::create_dir_all(&debug_output_dir)?;
+        let runtime_calls = std::fs::File::options()
+            .create(true)
+            .append(true)
+            .open(debug_output_dir.join("runtime_calls.txt"))?;
+        let mut runtime_calls = std::io::BufWriter::new(runtime_calls);
+        runtime_calls
+            .write_all(format!("{} {}\n", runtime_path, runtime_options.join(" ")).as_bytes())?;
+        runtime_calls.flush()?;
+    }
+    std::process::exit(call_oci_runtime(runtime_path, runtime_options)?);
 }
 
 /// Extracts the container bundle path from the trailing runtime options, if present.
