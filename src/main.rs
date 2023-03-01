@@ -1,7 +1,11 @@
+mod env_vars;
 mod networking_mounts;
 
 use anyhow::{Context, Result};
-use clap::{crate_authors, crate_description, crate_name, crate_version, Arg, ArgAction};
+use clap::{
+    crate_authors, crate_description, crate_name, crate_version, Arg, ArgAction, ValueHint,
+};
+use env_vars::{modify_env_vars, parse_env_var, EnvVar, EnvVarOverride};
 use networking_mounts::modify_networking_mounts;
 use oci_spec::runtime::Spec;
 use std::{fs, io::Write, path::PathBuf, process};
@@ -17,6 +21,7 @@ fn main() -> Result<()> {
         .arg(
             Arg::new("runtime-path")
                 .long("oi-runtime-path")
+                .value_hint(ValueHint::ExecutablePath)
                 .default_value("runc")
                 .help("Path to OCI runtime."),
         )
@@ -24,19 +29,36 @@ fn main() -> Result<()> {
             Arg::new("readonly-networking-mounts")
                 .long("oi-readonly-networking-mounts")
                 .action(ArgAction::SetTrue)
-                .help("Mount networking files as readonly."),
+                .help("Mount networking files as readonly"),
         )
         .arg(
             Arg::new("write-debug-output")
                 .long("oi-write-debug-output")
                 .action(ArgAction::SetTrue)
-                .help("Write debug output to --oi-debug-output-dir."),
+                .help("Write debug output"),
         )
         .arg(
             Arg::new("debug-output-dir")
                 .long("oi-debug-output-dir")
+                .value_hint(ValueHint::DirPath)
                 .default_value("/var/log/oci-interceptor")
-                .help("Debug output location when --oi-write-debug-output is enabled."),
+                .help("Debug output location"),
+        )
+        .arg(
+            Arg::new("env-vars")
+                .long("oi-env")
+                .action(ArgAction::Append)
+                .value_name("NAME=VALUE")
+                .value_parser(parse_env_var)
+                .help("Set an environment variable if not already present in config"),
+        )
+        .arg(
+            Arg::new("env-vars-forced")
+                .long("oi-env-force")
+                .action(ArgAction::Append)
+                .value_name("NAME=VALUE")
+                .value_parser(parse_env_var)
+                .help("Override an environment variable, regardless of any original value"),
         )
         .arg(
             Arg::new("version")
@@ -75,6 +97,18 @@ fn main() -> Result<()> {
             .expect("No debug output dir set"),
     );
 
+    let env_var_overrides: Vec<EnvVarOverride> = {
+        let env_vars = matches
+            .get_many::<EnvVar>("env-vars")
+            .unwrap_or_default()
+            .map(|e| EnvVarOverride::new(e, false));
+        let env_vars_forced = matches
+            .get_many::<EnvVar>("env-vars-forced")
+            .unwrap_or_default()
+            .map(|e| EnvVarOverride::new(e, true));
+        env_vars.chain(env_vars_forced).collect()
+    };
+
     // Intercept "create" commands to the underlying OCI runtime
     //
     // As a heuristic, we look for the -b or --bundle flag in the provided options. This is not
@@ -107,6 +141,9 @@ fn main() -> Result<()> {
         if matches.get_flag("readonly-networking-mounts") {
             modify_networking_mounts(&mut spec);
             spec_modified = true;
+        }
+        if !env_var_overrides.is_empty() {
+            modify_env_vars(&mut spec, env_var_overrides);
         }
 
         // Write the updated config back out to disk
