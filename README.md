@@ -1,14 +1,11 @@
 # OCI Interceptor
 
 An OCI runtime wrapper that modifies containers'
-[`config.json`](https://github.com/opencontainers/runtime-spec/blob/master/config.md) according to
-specified rules before forwarding the container to a real OCI runtime for creation.
+[runtime configuration](https://github.com/opencontainers/runtime-spec/blob/main/config.md) according to
+specified rules before forwarding the container to a real runtime for creation.
 
 This can be used to enforce certain policies on created containers, or to work around limitations
-in higher-level tools like Docker.
-
-Note that programs like Docker track their own container metadata, which may not accurately reflect
-these last-minute changes to the underlying OCI configuration.
+in higher-level container management tools such as Docker.
 
 ## Installation
 
@@ -29,15 +26,31 @@ Currently, prebuilt binaries are only available for x86 Linux (glibc-based). Oth
 
 ## Usage
 
-All `oci-interceptor` flags are prefixed with `--oi-` in order to avoid conflicts with the underlying OCI runtime.
+All `oci-interceptor` flags are prefixed with `--oi` in order to avoid conflicts with the underlying OCI runtime.
 
-```bash
-$ oci-interceptor \
-  [--oi-runtime-path=runc] \
-  [--oi-debug-output-dir=/var/log/oci-interceptor] \
-  [--oi-write-debug-output] \
-  [--oi-readonly-networking-mounts] \
-  [...other flags forwarded to runtime]
+```
+Usage: oci-interceptor [OPTIONS] [runtime-options]...
+
+Arguments:
+  [runtime-options]...  All additional options will be forwarded to the OCI runtime.
+
+Options:
+      --oi-runtime-path <runtime-path>
+          Path to OCI runtime. [default: runc]
+      --oi-readonly-networking-mounts
+          Mount networking files as readonly
+      --oi-write-debug-output
+          Write debug output
+      --oi-debug-output-dir <debug-output-dir>
+          Debug output location [default: /var/log/oci-interceptor]
+      --oi-env <NAME=VALUE>
+          Set an environment variable if not already present in config
+      --oi-env-force <NAME=VALUE>
+          Override an environment variable, regardless of any original value
+      --oi-version
+          Print version
+      --oi-help
+          Print help
 ```
 
 ### With Docker
@@ -47,8 +60,8 @@ configuration](https://docs.docker.com/engine/reference/commandline/dockerd/#dae
 must be modified to add this runtime. If you want it to be invoked every time a container is
 created, you should also make it the default runtime (instead of `runc`).
 
-If you are not using a custom OCI runtime like `crun` or `youki`, you can omit the `--oi-runtime-path`
-option, as it defaults to `runc`, the default runtime included with Docker.
+If you are not using an alternative OCI runtime such as [`crun`](https://github.com/containers/crun) or [`youki`](https://github.com/containers/youki), you can omit the `--oi-runtime-path`
+option, as it defaults to `runc`, the default runtime bundled with Docker.
 
 #### Example `/etc/docker/daemon.json` contents
 
@@ -65,16 +78,17 @@ option, as it defaults to `runc`, the default runtime included with Docker.
     }
 }
 ```
+The Docker daemon must be restarted (`systemctl restart docker.service`) in order to apply changes to this configuration file.
 
-Even if you set `oci-interceptor` as the default runtime, you can still bypass it while running a container via `docker run --runtime=runc`.
+Note that if you set `oci-interceptor` as the default runtime, you can still bypass it for a specific container by specifying `docker run --runtime=runc`.
 
-While it is not possible to override `runtimeArgs` using a `docker run` option, you could specify several different "runtimes" (with different `runtimeArgs`) and switch between them using `docker run --runtime=<name>`.
+While it is not possible to override `runtimeArgs` with a `docker run` option, you could specify multiple interceptor "runtimes" (with different flags) and switch between them using `docker run --runtime=<name>`.
 
 ## Supported Customizations
 
-### Readonly networking mounts
+### Read-only networking mounts
 
-Works around the fact that Docker mounts the following files as read/write by default (https://github.com/moby/moby/issues/41991):
+Works around the fact that Docker mounts the following files as read/write by default:
 
 - `/etc/hosts`
 - `/etc/hostname`
@@ -82,19 +96,37 @@ Works around the fact that Docker mounts the following files as read/write by de
 
 When XFS project quotas are used to [restrict a container's writable layer
 size](https://github.com/moby/moby/pull/24771), these files provide an escape hatch for malicious
-users to fill the graph storage volume. This can be circumvented by manually mounting readonly files
-over these paths, but in that case Docker can no longer manage the container's DNS configuration.
+users to fill the host storage volume.
 
-To avoid this issue, specify the `--oi-readonly-networking-mounts` flag, which automatically modifies
-these mounts to be read-only, preventing writes from inside the container.
+This can usually only be circumvented by manually creating read-only bind mounts over these paths (in which case Docker can no longer manage the container's DNS configuration) or by making the entire rootfs read-only (which severely constrains the workloads possible inside the container).
+
+To avoid this issue, specify the `--oi-readonly-networking-mounts` flag. This modifies these mounts to be read-only, preventing writes from inside the container.
+
+#### Related issues
+
+- Workaround for [moby#13152](https://github.com/moby/moby/issues/41991), [moby#41991](https://github.com/moby/moby/issues/41991) (without custom bind mounts or making entire rootfs readonly)
+- Optionally reverts [moby#5129](https://github.com/moby/moby/pull/5129)
+
+### Overriding environment variables
+
+Allows specifying default environment variable values for containers without using `docker run --env` or `--env-file`.
+
+Use `--oi-env <NAME=VALUE>` to set a default for an environment variable. This will not take precedence over a value explicitly specified via `docker run --env` or `--env-file`.
+
+Alternatively, use `--oi-env-force <NAME=VALUE>` to force an certain value even when otherwise specified via `docker run --env` or `--env-file`.
+
+#### Related issues
+- Workaround for [moby#16699](https://github.com/moby/moby/issues/16699) (supports arbitrary environment variables, not only proxy config)
+- Solution for https://stackoverflow.com/questions/33775075/how-to-set-default-docker-environment-variables
+- Solution for https://stackoverflow.com/questions/50644143/dockerd-set-default-environment-variable-for-all-containers
 
 ### Debug output
 
-Specify the `--oi-write-debug-output` flag to write original, parsed, and modified container configs to the directory specified by `--oi-debug-output-dir` (default `/var/log/oci-interceptor`).
+Specify the `--oi-write-debug-output` flag to write original, parsed, and modified container configs to the directory specified as `--oi-debug-output-dir` (default `/var/log/oci-interceptor`).
 
-These filenames will have the format:
+The resulting files will be named:
 - `<container_hostname>_original.json` (the original config)
 - `<container_hostname>_parsed.json` (the parsed config)
 - `<container_hostname>_modified.json` (the modified config, only written if modification occurred)
 
-Additionally, forwarded calls to the underlying OCI runtime will be appended to the file `runtime_calls.txt` within this directory.
+Additionally, forwarded calls to the underlying OCI runtime will be appended to the file `runtime_calls.txt` within the debug output directory.
