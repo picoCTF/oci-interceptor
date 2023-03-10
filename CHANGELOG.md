@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.1
+
+- Reverted to upstream OCI spec parsing library.
+
 ## v0.2.0
 
 - All options are now prefixed with `--oi` in order to avoid name conflicts with underlying runtime options. For example, `--readonly-networking-mounts` is now called `--oi-readonly-networking-mounts`.
