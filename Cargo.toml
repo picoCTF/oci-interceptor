@@ -17,5 +17,5 @@ oci-spec = "0.6.0"
 serde_json = "1.0.93"
 
 [patch.crates-io]
-# TODO: temporary workaround for https://github.com/picoCTF/oci-interceptor/issues/69
-oci-spec = { git = "https://github.com/dmartin/oci-spec-rs", rev="1595d7a9674f470c4560382c51449a8eaf710fa6" }
+# TODO: waiting for post-0.6.0 release (including PR #125)
+oci-spec = { git = "https://github.com/containers/oci-spec-rs", rev="bed58f053943bd80f7afb5c177c229e5f67438d7" }
