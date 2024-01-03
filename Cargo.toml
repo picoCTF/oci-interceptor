@@ -11,11 +11,7 @@ version = "0.2.1"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.78"
+anyhow = "1.0.79"
 clap = { version = "4.4.12", features = ["cargo"] }
-oci-spec = "0.6.0"
-serde_json = "1.0.109"
-
-[patch.crates-io]
-# TODO: waiting for post-0.6.0 release (including PR #125)
-oci-spec = { git = "https://github.com/containers/oci-spec-rs", rev="bed58f053943bd80f7afb5c177c229e5f67438d7" }
+oci-spec = "0.6.4"
+serde_json = "1.0.110"
