@@ -1,5 +1,8 @@
 [package]
-authors = ["picoCTF team <opensource@picoctf.org>"]
+authors = [
+  "Dustin Martin <dustin@dmartin.io>",
+  "picoCTF team <opensource@picoctf.org>",
+]
 description = "OCI runtime wrapper for modifying container configs before creation"
 edition = "2021"
 license = "MIT"
@@ -11,7 +14,7 @@ version = "0.2.1"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.80"
-clap = { version = "4.5.1", features = ["cargo"] }
+anyhow = "1.0.81"
+clap = { version = "4.5.3", features = ["cargo"] }
 oci-spec = "0.6.5"
 serde_json = "1.0.114"
