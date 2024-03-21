@@ -129,4 +129,4 @@ The resulting files will be named:
 - `<container_hostname>_parsed.json` (the parsed config)
 - `<container_hostname>_modified.json` (the modified config, only written if modification occurred)
 
-Additionally, forwarded calls to the underlying OCI runtime will be appended to the file `runtime_calls.txt` within the debug output directory.
+Additionally, forwarded calls to the underlying OCI runtime will be appended to the file `runtime_calls.log` within the debug output directory.

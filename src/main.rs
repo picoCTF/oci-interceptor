@@ -169,7 +169,7 @@ fn main() -> Result<()> {
         let runtime_calls = std::fs::File::options()
             .create(true)
             .append(true)
-            .open(debug_output_dir.join("runtime_calls.txt"))?;
+            .open(debug_output_dir.join("runtime_calls.log"))?;
         let mut runtime_calls = std::io::BufWriter::new(runtime_calls);
         runtime_calls
             .write_all(format!("{} {}\n", runtime_path, runtime_options.join(" ")).as_bytes())?;
