@@ -5,7 +5,7 @@ authors = [
 ]
 description = "OCI runtime wrapper for modifying container configs before creation"
 edition = "2021"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 name = "oci-interceptor"
 publish = false
 repository = "https://github.com/picoCTF/oci-interceptor"
