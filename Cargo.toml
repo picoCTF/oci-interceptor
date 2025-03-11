@@ -4,7 +4,7 @@ authors = [
   "picoCTF team <opensource@picoctf.org>",
 ]
 description = "OCI runtime wrapper for modifying container configs before creation"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 name = "oci-interceptor"
 publish = false
