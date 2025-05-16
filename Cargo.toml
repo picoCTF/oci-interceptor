@@ -1,6 +1,5 @@
 [package]
 authors = [
-  "Dustin Martin <dustin@dmartin.io>",
   "picoCTF team <opensource@picoctf.org>",
 ]
 description = "OCI runtime wrapper for modifying container configs before creation"
