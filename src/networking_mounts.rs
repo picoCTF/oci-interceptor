@@ -13,12 +13,11 @@ pub(crate) fn modify_networking_mounts(spec: &mut Spec) {
         for mount in mounts.iter_mut() {
             match mount.destination().to_str() {
                 Some("/etc/hosts") | Some("/etc/hostname") | Some("/etc/resolv.conf") => {
-                    if let Some(options) = mount.options() {
-                        if !options.contains(&"ro".into()) {
+                    if let Some(options) = mount.options()
+                        && !options.contains(&"ro".into()) {
                             let mut options = options.clone();
                             options.push("ro".into());
                             mount.set_options(Some(options));
-                        }
                     }
                 }
                 Some(_) => {}
