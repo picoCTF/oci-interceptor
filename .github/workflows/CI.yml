@@ -35,6 +35,8 @@ jobs:
       uses: actions/checkout@v2
     - name: Set up Rust toolchain
       uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy      
     - name: Set up Rust caching
       uses: Swatinem/rust-cache@v2
     - name: Run rustfmt
