@@ -14,6 +14,6 @@ version = "0.2.1"
 
 [dependencies]
 anyhow = "1.0.102"
-clap = { version = "4.5.56", features = ["cargo"] }
+clap = { version = "4.5.60", features = ["cargo"] }
 oci-spec = "0.9.0"
 serde_json = "1.0.149"
