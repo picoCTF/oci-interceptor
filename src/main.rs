@@ -144,6 +144,7 @@ fn main() -> Result<()> {
         }
         if !env_var_overrides.is_empty() {
             modify_env_vars(&mut spec, env_var_overrides);
+            spec_modified = true;
         }
 
         // Write the updated config back out to disk
