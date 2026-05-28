@@ -120,6 +120,19 @@ Alternatively, use `--oi-env-force <NAME=VALUE>` to force an certain value even 
 - Solution for https://stackoverflow.com/questions/33775075/how-to-set-default-docker-environment-variables
 - Solution for https://stackoverflow.com/questions/50644143/dockerd-set-default-environment-variable-for-all-containers
 
+## Testing
+
+Unit tests run with `cargo test`. End-to-end integration tests live in `tests/integration.rs` and exercise the wrapper through a real Docker daemon. They are gated by the `OCI_INTERCEPTOR_INTEGRATION` environment variable so the default `cargo test` invocation stays portable.
+
+To run the integration tests locally on a Linux host with Docker:
+
+1. Build and install the binary: `cargo build --release && sudo install -m 0755 target/release/oci-interceptor /usr/local/bin/oci-interceptor`
+2. Configure `/etc/docker/daemon.json` with the named runtimes listed in the module docs of [tests/integration.rs](tests/integration.rs). The CI workflow (`.github/workflows/CI.yml`, `integration` job) is the canonical reference for the required daemon.json.
+3. `sudo systemctl restart docker`
+4. `OCI_INTERCEPTOR_INTEGRATION=1 cargo test --test integration -- --test-threads=1`
+
+CI runs the same suite on every push and pull request, which provides a regression check against the Docker and runc versions shipped on `ubuntu-latest` runners.
+
 ### Debug output
 
 Specify the `--oi-write-debug-output` flag to write original, parsed, and modified container configs to the directory specified as `--oi-debug-output-dir` (default `/var/log/oci-interceptor`).

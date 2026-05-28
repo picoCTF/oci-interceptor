@@ -49,3 +49,92 @@ jobs:
     - name: Run tests
       run: |
         cargo test
+
+  integration:
+    name: Integration (Docker + runc)
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04 # current challenge server target
+    needs: ci
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    - name: Set up Rust toolchain
+      uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # v1.94.1
+      with:
+        toolchain: stable
+    - name: Set up Rust caching
+      uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+    - name: Record Docker and runc versions
+      run: |
+        docker version
+        docker info --format '{{json .Runtimes}}' || true
+        runc --version || true
+    - name: Build oci-interceptor
+      run: cargo build --release
+    - name: Install binary
+      run: sudo install -m 0755 target/release/oci-interceptor /usr/local/bin/oci-interceptor
+    - name: Create debug output directory
+      run: |
+        sudo mkdir -p /tmp/oi-interceptor-debug
+        sudo chmod 0777 /tmp/oi-interceptor-debug
+    - name: Configure Docker daemon
+      run: |
+        sudo mkdir -p /etc/docker
+        sudo tee /etc/docker/daemon.json > /dev/null <<'EOF'
+        {
+          "runtimes": {
+            "oi-default": {
+              "path": "/usr/local/bin/oci-interceptor"
+            },
+            "oi-ro-net": {
+              "path": "/usr/local/bin/oci-interceptor",
+              "runtimeArgs": ["--oi-readonly-networking-mounts"]
+            },
+            "oi-env-foo": {
+              "path": "/usr/local/bin/oci-interceptor",
+              "runtimeArgs": ["--oi-env", "FOO=bar"]
+            },
+            "oi-env-force-foo": {
+              "path": "/usr/local/bin/oci-interceptor",
+              "runtimeArgs": ["--oi-env-force", "FOO=forced"]
+            },
+            "oi-debug": {
+              "path": "/usr/local/bin/oci-interceptor",
+              "runtimeArgs": [
+                "--oi-write-debug-output",
+                "--oi-debug-output-dir", "/tmp/oi-interceptor-debug"
+              ]
+            },
+            "oi-debug-ro-net": {
+              "path": "/usr/local/bin/oci-interceptor",
+              "runtimeArgs": [
+                "--oi-readonly-networking-mounts",
+                "--oi-write-debug-output",
+                "--oi-debug-output-dir", "/tmp/oi-interceptor-debug"
+              ]
+            }
+          }
+        }
+        EOF
+        sudo systemctl restart docker
+        # Wait for the daemon to be responsive again before kicking off tests.
+        for i in $(seq 1 30); do
+          if docker info > /dev/null 2>&1; then
+            echo "Docker daemon is ready"; break
+          fi
+          sleep 1
+        done
+        docker info --format '{{json .Runtimes}}'
+    - name: Pre-pull test image
+      run: docker pull alpine:3.20
+    - name: Run integration tests
+      env:
+        OCI_INTERCEPTOR_INTEGRATION: "1"
+      run: cargo test --test integration -- --test-threads=1 --nocapture
+    - name: Upload debug output on failure
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: oci-interceptor-debug-output
+        path: /tmp/oi-interceptor-debug/
+        if-no-files-found: ignore
