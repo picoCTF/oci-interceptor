@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.2.2
+
+- Fixed an issue where `--oi-env` overrides were silently discarded unless `--oi-readonly-networking-mounts` was also passed.
+- Changed the file extension of `--oi-write-debug-output` runtime call dumps from `.json` to `.log`.
+- Upgraded the crate to the Rust 2024 edition.
+- Relicensed under dual MIT OR Apache-2.0.
+- Added `RELEASING.md` documenting the release process, plus CI test coverage (unit tests, CLI smoke tests, tests-in-CI).
+- Bumped dependencies to current versions (`clap`, `anyhow`, `serde_json`, `oci-spec`).
+
 ## v0.2.1
 
 - Reverted to upstream OCI spec parsing library.
