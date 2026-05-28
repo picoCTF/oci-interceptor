@@ -39,7 +39,7 @@ jobs:
         run: |
           mkdir out
           cp target/release/oci-interceptor out/
-          cp README.md LICENSE.md CHANGELOG.md out/
+          cp README.md LICENSE-MIT LICENSE-APACHE CHANGELOG.md out/
           cd out && tar czf oci-interceptor_${suffix}.tar.gz *
         env:
           suffix: ${{ matrix.rustc-target }}
