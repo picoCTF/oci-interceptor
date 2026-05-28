@@ -207,3 +207,54 @@ fn call_oci_runtime(runtime_path: &str, options: Vec<String>) -> Result<i32> {
         None => Ok(-1), // child process was killed by a signal
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn opts(args: &[&str]) -> Vec<String> {
+        args.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn finds_bundle_short_flag_space_separated() {
+        let mut o = opts(&["create", "-b", "/tmp/bundle", "cid"]);
+        assert_eq!(get_bundle_path(&mut o), Some(PathBuf::from("/tmp/bundle")));
+    }
+
+    #[test]
+    fn finds_bundle_short_flag_with_equals() {
+        let mut o = opts(&["create", "-b=/tmp/bundle", "cid"]);
+        assert_eq!(get_bundle_path(&mut o), Some(PathBuf::from("/tmp/bundle")));
+    }
+
+    #[test]
+    fn finds_bundle_long_flag_space_separated() {
+        let mut o = opts(&["create", "--bundle", "/tmp/bundle", "cid"]);
+        assert_eq!(get_bundle_path(&mut o), Some(PathBuf::from("/tmp/bundle")));
+    }
+
+    #[test]
+    fn finds_bundle_long_flag_with_equals() {
+        let mut o = opts(&["create", "--bundle=/tmp/bundle", "cid"]);
+        assert_eq!(get_bundle_path(&mut o), Some(PathBuf::from("/tmp/bundle")));
+    }
+
+    #[test]
+    fn returns_none_when_no_bundle_flag_present() {
+        let mut o = opts(&["start", "cid"]);
+        assert_eq!(get_bundle_path(&mut o), None);
+    }
+
+    #[test]
+    fn returns_none_for_empty_options() {
+        let mut o: Vec<String> = Vec::new();
+        assert_eq!(get_bundle_path(&mut o), None);
+    }
+
+    #[test]
+    fn returns_none_when_short_flag_has_no_following_arg() {
+        let mut o = opts(&["create", "-b"]);
+        assert_eq!(get_bundle_path(&mut o), None);
+    }
+}

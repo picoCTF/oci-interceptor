@@ -68,3 +68,42 @@ pub(crate) fn modify_env_vars(spec: &mut Spec, vars: Vec<EnvVarOverride>) {
         spec.set_process(Some(new_process));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_simple_key_value() {
+        let v = parse_env_var("FOO=bar").unwrap();
+        assert_eq!(v.name, "FOO");
+        assert_eq!(v.value, "bar");
+    }
+
+    #[test]
+    fn value_may_contain_equals_signs() {
+        let v = parse_env_var("FOO=a=b=c").unwrap();
+        assert_eq!(v.name, "FOO");
+        assert_eq!(v.value, "a=b=c");
+    }
+
+    #[test]
+    fn missing_equals_is_rejected() {
+        assert!(parse_env_var("FOO").is_err());
+    }
+
+    #[test]
+    fn empty_name_is_rejected() {
+        assert!(parse_env_var("=bar").is_err());
+    }
+
+    #[test]
+    fn empty_value_is_rejected() {
+        assert!(parse_env_var("FOO=").is_err());
+    }
+
+    #[test]
+    fn empty_string_is_rejected() {
+        assert!(parse_env_var("").is_err());
+    }
+}
