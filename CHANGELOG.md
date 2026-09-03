@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.3
+
+- Switched CI from `dtolnay/rust-toolchain` to `actions-rust-lang/setup-rust-toolchain`. CI builds now compile with `RUSTFLAGS=-D warnings` and surface rustc/rustfmt warnings as PR annotations; release builds are exempt so a new stable lint cannot break a tagged release. Dependabot now tracks GitHub Actions pins.
+- Documented the glibc floor of the prebuilt `x86_64-unknown-linux-gnu` binary: it is built on `ubuntu-24.04` runners (matching the challenge server target) and requires glibc 2.39 or newer (Ubuntu 24.04, Debian 13, RHEL 10, Fedora 40, or newer). The v0.2.2 binary already had this floor; no runners or artifacts changed. The release workflow now checks that the built binary's target matches the tarball name.
+
 ## v0.2.2
 
 - Fixed an issue where `--oi-env` overrides were silently discarded unless `--oi-readonly-networking-mounts` was also passed.
