@@ -23,18 +23,36 @@ jobs:
     strategy:
       matrix:
         include:
-          - runner-os: ubuntu-24.04 # current challenge server target
+          - runner-os: ubuntu-24.04 # current challenge server target; also sets the glibc floor (2.39) of the release binary
             rustc-target: "x86_64-unknown-linux-gnu"
     steps:
       - name: Checkout repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # v1.94.1
+        uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
         with:
           toolchain: stable
+          # Release builds have nothing to restore and would only evict CI caches.
+          cache: false
+          # Do not let a new stable lint break a tagged release (the action defaults to -D warnings).
+          rustflags: ""
       - name: Build
         run: |
           cargo build --release
+      - name: Verify binary matches tarball target
+        env:
+          expected: ${{ matrix.rustc-target }}
+        run: |
+          # cargo build without --target builds for the host, so the host triple must match the tarball suffix.
+          host="$(rustc -vV | sed -n 's/^host: //p')"
+          if [ "$host" != "$expected" ]; then
+            echo "::error::built for $host but the tarball is named for $expected"
+            exit 1
+          fi
+          file target/release/oci-interceptor
+          if command -v objdump > /dev/null; then
+            echo "glibc floor: $(objdump -T target/release/oci-interceptor | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)"
+          fi
       - name: Create tarball
         run: |
           mkdir out

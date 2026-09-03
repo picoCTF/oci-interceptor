@@ -22,7 +22,7 @@ Alternatively, build and install from source:
 $ cargo install --locked --path .
 ```
 
-Currently, prebuilt binaries are only available for x86 Linux (glibc-based). Other platforms must installed from source.
+Currently, prebuilt binaries are only available for x86-64 Linux with glibc 2.39 or newer (e.g. Ubuntu 24.04). Other platforms must be installed from source.
 
 ## Usage
 
