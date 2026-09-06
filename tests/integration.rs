@@ -90,16 +90,16 @@ fn passthrough_propagates_nonzero_exit_code() {
 }
 
 #[test]
-fn networking_mounts_writable_without_flag() {
-    if !check_enabled("networking_mounts_writable_without_flag") {
+fn networking_mounts_readonly_without_any_flag() {
+    if !check_enabled("networking_mounts_readonly_without_any_flag") {
         return;
     }
     for target in ["/etc/hosts", "/etc/hostname", "/etc/resolv.conf"] {
         let opts = mount_options("oi-default", target);
         let opts: Vec<&str> = opts.split(',').collect();
         assert!(
-            opts.contains(&"rw"),
-            "{target} expected to be rw by default, got: {opts:?}"
+            opts.contains(&"ro"),
+            "{target} expected to be ro with no flags at all, got: {opts:?}"
         );
     }
 }
