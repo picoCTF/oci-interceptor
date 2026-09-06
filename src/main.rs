@@ -8,7 +8,7 @@ use clap::{
 use env_vars::{EnvVar, EnvVarOverride, modify_env_vars, parse_env_var};
 use networking_mounts::modify_networking_mounts;
 use oci_spec::runtime::Spec;
-use std::{fs, io::Write, path::PathBuf, process};
+use std::{fs, io::Write, os::unix::process::CommandExt, path::PathBuf, process};
 
 fn main() -> Result<()> {
     let matches = clap::Command::new(crate_name!())
@@ -26,10 +26,13 @@ fn main() -> Result<()> {
                 .help("Path to OCI runtime."),
         )
         .arg(
+            // Retained as an accepted no-op so a daemon.json still passing it keeps
+            // working: rejecting it would fail every container launch on any host
+            // upgraded before its runtime config was updated.
             Arg::new("readonly-networking-mounts")
                 .long("oi-readonly-networking-mounts")
                 .action(ArgAction::SetTrue)
-                .help("Mount networking files as readonly"),
+                .help("Deprecated, and now a no-op: networking mounts are always readonly"),
         )
         .arg(
             Arg::new("write-debug-output")
@@ -137,11 +140,20 @@ fn main() -> Result<()> {
             serde_json::to_writer_pretty(&parsed_file, &spec)?;
         }
 
-        // Make any enabled modifications
-        if matches.get_flag("readonly-networking-mounts") {
-            modify_networking_mounts(&mut spec);
-            spec_modified = true;
-        }
+        // Make any enabled modifications.
+        //
+        // Networking mounts are always made read-only. Docker bind-mounts these three
+        // files from outside the container's writable layer, so where XFS project quotas
+        // restrict that layer they are an escape hatch for filling the host volume -- see
+        // "Read-only networking mounts" in the README. On a shared host that affects every
+        // other container, which is what makes it worth enforcing unconditionally.
+        //
+        // Note this is not a barrier between containers: each gets its own copy of these
+        // files, so tampering only ever affects the container doing it, and a process with
+        // code execution can bypass them anyway (HOSTALIASES, RES_OPTIONS, LD_PRELOAD, or
+        // simply querying a resolver directly). Treat it as quota enforcement, with
+        // in-container tamper resistance as a side effect.
+        spec_modified |= modify_networking_mounts(&mut spec);
         if !env_var_overrides.is_empty() {
             modify_env_vars(&mut spec, env_var_overrides);
             spec_modified = true;
@@ -176,7 +188,8 @@ fn main() -> Result<()> {
             .write_all(format!("{} {}\n", runtime_path, runtime_options.join(" ")).as_bytes())?;
         runtime_calls.flush()?;
     }
-    std::process::exit(call_oci_runtime(runtime_path, runtime_options)?);
+    // On success this replaces the current process, so nothing below runs.
+    Err(call_oci_runtime(runtime_path, runtime_options))
 }
 
 /// Extracts the container bundle path from the trailing runtime options, if present.
@@ -194,19 +207,29 @@ fn get_bundle_path(options: &mut [String]) -> Option<PathBuf> {
     None
 }
 
-/// Calls the actual OCI runtime, passing along any runtime options.
-fn call_oci_runtime(runtime_path: &str, options: Vec<String>) -> Result<i32> {
-    let mut child = process::Command::new(runtime_path)
+/// Replaces this process with the actual OCI runtime, passing along any runtime options.
+///
+/// This execs rather than spawning a child and waiting on it, so that the runtime inherits
+/// our PID and we leave the process tree entirely. A wrapper that spawns and waits is
+/// wrong for an OCI runtime in two ways:
+///
+/// - containerd's shim invokes the runtime through go-runc, which builds commands with
+///   Go's `exec.CommandContext`. On a cancelled or timed-out call that delivers SIGKILL to
+///   the direct child only. With a wrapper in between, the wrapper dies and the real
+///   runtime is orphaned, while the shim believes the call was cancelled. For a
+///   `runc delete` that leaves the task undeleted and its shim never shut down.
+/// - A runtime killed by a signal was reported to the caller as exit code -1, which
+///   `process::exit` truncates to 255. Callers that distinguish signal death from a 255
+///   exit status saw the wrong thing. Exec'ing reports the real wait status.
+///
+/// Returns only on failure to exec.
+fn call_oci_runtime(runtime_path: &str, options: Vec<String>) -> anyhow::Error {
+    let err = process::Command::new(runtime_path)
         .args(options.as_slice())
-        .spawn()
-        .with_context(|| "Failed to execute underlying OCI runtime")?;
-    let status = child
-        .wait()
-        .with_context(|| "Failed to wait on OCI runtime process")?;
-    match status.code() {
-        Some(code) => Ok(code),
-        None => Ok(-1), // child process was killed by a signal
-    }
+        .exec();
+    anyhow::Error::new(err).context(format!(
+        "Failed to execute underlying OCI runtime: {runtime_path}"
+    ))
 }
 
 #[cfg(test)]

@@ -38,7 +38,7 @@ Options:
       --oi-runtime-path <runtime-path>
           Path to OCI runtime. [default: runc]
       --oi-readonly-networking-mounts
-          Mount networking files as readonly
+          Deprecated, and now a no-op: networking mounts are always readonly
       --oi-write-debug-output
           Write debug output
       --oi-debug-output-dir <debug-output-dir>
@@ -70,10 +70,7 @@ option, as it defaults to `runc`, the default runtime bundled with Docker.
     "default-runtime": "oci-interceptor",
     "runtimes": {
         "oci-interceptor": {
-            "path": "/usr/local/bin/oci-interceptor",
-            "runtimeArgs": [
-                "--oi-readonly-networking-mounts"
-            ]
+            "path": "/usr/local/bin/oci-interceptor"
         }
     }
 }
@@ -82,7 +79,40 @@ The Docker daemon must be restarted (`systemctl restart docker.service`) in orde
 
 Note that if you set `oci-interceptor` as the default runtime, you can still bypass it for a specific container by specifying `docker run --runtime=runc`.
 
-While it is not possible to override `runtimeArgs` with a `docker run` option, you could specify multiple interceptor "runtimes" (with different flags) and switch between them using `docker run --runtime=<name>`.
+#### Passing flags: use a wrapper script, not `runtimeArgs`
+
+**Do not put the interceptor's flags in `runtimeArgs`.** Docker generates its own wrapper
+script for any runtime whose `runtimeArgs` is non-empty, and that generated wrapper does
+not `exec`:
+
+```sh
+#!/bin/sh
+/usr/local/bin/oci-interceptor --flags $@
+```
+
+It therefore stays in the process tree between the containerd shim and the real runtime.
+containerd invokes the runtime through go-runc, which builds commands with Go's
+`exec.CommandContext`; a cancelled or timed-out call delivers SIGKILL to the direct child
+only — that shell — orphaning `runc` beneath it. For a `runc delete` the task is then never
+deleted and its `containerd-shim-runc-v2` never shuts down, leaking roughly 5 MiB per
+occurrence until the host is rebooted. That defeats the point of the interceptor exec'ing
+the runtime at all.
+
+If you have no flags to pass, you need no wrapper at all: name the binary itself as `path`,
+as in the example above. Otherwise put the flags in a wrapper script of your own that
+`exec`s, and name that script as `path`:
+
+```sh
+#!/bin/sh
+exec /usr/local/bin/oci-interceptor --oi-env HTTP_PROXY=http://proxy.example:3128 "$@"
+```
+
+Keep `"$@"` quoted — Docker's generated wrapper uses a bare `$@`, which word-splits and
+glob-expands its arguments. An absent or empty `runtimeArgs` generates no wrapper.
+
+You can still run several interceptor "runtimes" with different flags and switch between
+them using `docker run --runtime=<name>`; each one needs its own wrapper script, named by
+its own `path`.
 
 ## Supported Customizations
 
@@ -100,12 +130,14 @@ users to fill the host storage volume.
 
 This can usually only be circumvented by manually creating read-only bind mounts over these paths (in which case Docker can no longer manage the container's DNS configuration) or by making the entire rootfs read-only (which severely constrains the workloads possible inside the container).
 
-To avoid this issue, specify the `--oi-readonly-networking-mounts` flag. This modifies these mounts to be read-only, preventing writes from inside the container.
+These mounts are always modified to be read-only, preventing writes from inside the container. The mounts themselves are left in place: Docker points a container on a user-defined network at its embedded DNS resolver by writing `nameserver 127.0.0.11` into the bind-mounted `/etc/resolv.conf`, so removing the mount would break resolution of sibling containers by name. Only write access is taken away.
+
+The `--oi-readonly-networking-mounts` flag is retained as an accepted no-op so that an existing `daemon.json` passing it keeps working; it no longer has any effect.
 
 #### Related issues
 
 - Workaround for [moby#13152](https://github.com/moby/moby/issues/41991), [moby#41991](https://github.com/moby/moby/issues/41991) (without custom bind mounts or making entire rootfs readonly)
-- Optionally reverts [moby#5129](https://github.com/moby/moby/pull/5129)
+- Reverts [moby#5129](https://github.com/moby/moby/pull/5129)
 
 ### Overriding environment variables
 
@@ -127,7 +159,7 @@ Unit tests run with `cargo test`. End-to-end integration tests live in `tests/in
 To run the integration tests locally on a Linux host with Docker:
 
 1. Build and install the binary: `cargo build --release && sudo install -m 0755 target/release/oci-interceptor /usr/local/bin/oci-interceptor`
-2. Configure `/etc/docker/daemon.json` with the named runtimes listed in the module docs of [tests/integration.rs](tests/integration.rs). The CI workflow (`.github/workflows/CI.yml`, `integration` job) is the canonical reference for the required daemon.json.
+2. Configure `/etc/docker/daemon.json` with the named runtimes listed in the module docs of [tests/integration.rs](tests/integration.rs). The CI workflow (`.github/workflows/CI.yml`, `integration` job) shows the exact set the suite expects. Note that it is a test harness, not a reference deployment: it uses `runtimeArgs` because that is the only native per-runtime flag mechanism and the flag assertions need it. For a real host, follow [Passing flags](#passing-flags-use-a-wrapper-script-not-runtimeargs) instead.
 3. `sudo systemctl restart docker`
 4. `OCI_INTERCEPTOR_INTEGRATION=1 cargo test --test integration -- --test-threads=1`
 
@@ -135,7 +167,7 @@ CI runs the same suite on every push and pull request, which provides a regressi
 
 ### Debug output
 
-Specify the `--oi-write-debug-output` flag to write original, parsed, and modified container configs to the directory specified as `--oi-debug-output-dir` (default `/var/log/oci-interceptor`).
+Specify the `--oi-write-debug-output` flag to write original, parsed, and modified container configs to the directory specified as `--oi-debug-output-dir` (default `/var/log/oci-interceptor`). As with every other flag, pass these from an exec'ing wrapper script rather than `runtimeArgs` — see [Passing flags](#passing-flags-use-a-wrapper-script-not-runtimeargs).
 
 The resulting files will be named:
 - `<container_hostname>_original.json` (the original config)
