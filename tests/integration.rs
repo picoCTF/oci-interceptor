@@ -12,6 +12,9 @@
 //! - `oi-env-force-foo`  — `--oi-env-force FOO=forced`
 //! - `oi-debug`          — `--oi-write-debug-output --oi-debug-output-dir <DEBUG_DIR>`
 //! - `oi-debug-ro-net`   — same as `oi-debug` plus `--oi-readonly-networking-mounts`
+//!
+//! To test a runtime other than runc, add `--oi-runtime-path <path>` to every runtime above and
+//! set `OCI_INTERCEPTOR_RUNTIME_PATH` to the same path, which the suite checks calls reach.
 
 use std::path::PathBuf;
 use std::process::{Command, Output};
@@ -218,6 +221,38 @@ fn debug_output_files_written() {
         parsed_contents.contains(&hostname),
         "parsed config didn't contain hostname {hostname}"
     );
+}
+
+/// Without this, a daemon.json that lost `--oi-runtime-path` would pass every other test on runc.
+#[test]
+fn runtime_calls_reach_configured_runtime() {
+    if !check_enabled("runtime_calls_reach_configured_runtime") {
+        return;
+    }
+    let expected =
+        std::env::var("OCI_INTERCEPTOR_RUNTIME_PATH").unwrap_or_else(|_| "runc".to_string());
+    let cidfile = std::env::temp_dir().join(unique_hostname("oi-cid"));
+    let out = docker_run(
+        "oi-debug",
+        &["--cidfile", cidfile.to_str().expect("non-UTF-8 temp dir")],
+        &["true"],
+    );
+    assert!(out.status.success());
+    let cid = std::fs::read_to_string(&cidfile).expect("cidfile unreadable");
+    let _ = std::fs::remove_file(&cidfile);
+    let cid = cid.trim();
+
+    let log = std::fs::read_to_string(PathBuf::from(DEBUG_DIR).join("runtime_calls.log"))
+        .expect("runtime_calls.log unreadable");
+    let calls: Vec<&str> = log.lines().filter(|line| line.contains(cid)).collect();
+    assert!(!calls.is_empty(), "no runtime calls logged for {cid}");
+    let prefix = format!("{expected} ");
+    for call in calls {
+        assert!(
+            call.starts_with(&prefix),
+            "expected a call to {expected}, got: {call}"
+        );
+    }
 }
 
 #[test]

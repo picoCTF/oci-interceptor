@@ -163,6 +163,8 @@ To run the integration tests locally on a Linux host with Docker:
 3. `sudo systemctl restart docker`
 4. `OCI_INTERCEPTOR_INTEGRATION=1 cargo test --test integration -- --test-threads=1`
 
+This tests the interceptor over `runc`, its default. To test another runtime, add `--oi-runtime-path <path>` to every runtime's `runtimeArgs` and set `OCI_INTERCEPTOR_RUNTIME_PATH` to the same path; the suite then checks that runtime calls reach it.
+
 CI runs the same suite on every push and pull request, which provides a regression check against the Docker and runc versions shipped on `ubuntu-latest` runners.
 
 ### Debug output
