@@ -165,7 +165,7 @@ To run the integration tests locally on a Linux host with Docker:
 
 This tests the interceptor over `runc`, its default. To test another runtime, add `--oi-runtime-path <path>` to every runtime's `runtimeArgs` and set `OCI_INTERCEPTOR_RUNTIME_PATH` to the same path; the suite then checks that runtime calls reach it.
 
-CI runs the same suite on every push and pull request, which provides a regression check against the Docker and runc versions shipped on `ubuntu-latest` runners.
+CI runs the same suite on every push and pull request on `ubuntu-24.04`, with Docker and crun pinned to the versions picoCTF's challenge servers run: once against runc and once against crun.
 
 ### Debug output
 

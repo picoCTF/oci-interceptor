@@ -49,10 +49,20 @@ jobs:
         cargo test
 
   integration:
-    name: Integration (Docker + runc)
+    name: Integration (Docker + ${{ matrix.runtime }})
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-24.04 # current challenge server target
     needs: ci
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The interceptor's default, so this leg passes no --oi-runtime-path.
+          - runtime: runc
+            runtime-path: runc
+          # What the challenge servers run beneath the interceptor.
+          - runtime: crun
+            runtime-path: /usr/local/bin/crun
     steps:
     - name: Checkout repo
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,11 +70,31 @@ jobs:
       uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
       with:
         toolchain: stable
-    - name: Record Docker and runc versions
+    # The runner image ships its own Docker pin and removes Docker's apt source afterwards.
+    - name: Install Docker
+      env:
+        # The version the challenge servers run. ansible-roles' docker_version_pin_map is only
+        # the floor, so this must not go below it.
+        DOCKER_VERSION: "5:29.8.2-1~ubuntu.24.04~noble"
+        DEBIAN_FRONTEND: noninteractive
       run: |
-        docker version
-        docker info --format '{{json .Runtimes}}' || true
-        runc --version || true
+        sudo install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --batch --yes --dearmor -o /etc/apt/keyrings/docker.gpg
+        echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu noble stable" \
+          | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends "docker-ce=${DOCKER_VERSION}" "docker-ce-cli=${DOCKER_VERSION}"
+    # The upstream static build, as the role installs it: distro crun is too old for Docker 29.
+    - name: Install crun
+      if: matrix.runtime == 'crun'
+      env:
+        # Keep in step with crun_version and crun_sha256 in ansible-roles' multihost_docker role.
+        CRUN_VERSION: "1.30.1"
+        CRUN_SHA256: "86d1e6a0e76945975d3aebfab39cbc6a26eea15f1c3fc66b6776d19e5dc346a0"
+      run: |
+        curl -fsSL -o crun "https://github.com/containers/crun/releases/download/${CRUN_VERSION}/crun-${CRUN_VERSION}-linux-amd64"
+        echo "${CRUN_SHA256}  crun" | sha256sum -c -
+        sudo install -m 0755 crun "${{ matrix.runtime-path }}"
     - name: Build oci-interceptor
       run: cargo build --release
     - name: Install binary
@@ -74,10 +104,18 @@ jobs:
         sudo mkdir -p /tmp/oi-interceptor-debug
         sudo chmod 0777 /tmp/oi-interceptor-debug
     - name: Configure Docker daemon
+      env:
+        OI_RUNTIME_PATH: ${{ matrix.runtime-path }}
       run: |
         sudo mkdir -p /etc/docker
-        sudo tee /etc/docker/daemon.json > /dev/null <<'EOF'
+        # overlay2 as the role sets it; Docker 29 would otherwise pick the containerd image store.
+        # The runc leg leaves --oi-runtime-path off so the default is what gets tested.
+        jq --arg runtime "$OI_RUNTIME_PATH" '
+          if $runtime == "runc" then . else
+            .runtimes |= map_values(.runtimeArgs = ["--oi-runtime-path", $runtime] + (.runtimeArgs // []))
+          end' <<'EOF' | sudo tee /etc/docker/daemon.json
         {
+          "storage-driver": "overlay2",
           "runtimes": {
             "oi-default": {
               "path": "/usr/local/bin/oci-interceptor"
@@ -121,16 +159,22 @@ jobs:
           sleep 1
         done
         docker info --format '{{json .Runtimes}}'
+    # After the restart above, so it reports the daemon the tests run against.
+    - name: Record Docker and OCI runtime versions
+      run: |
+        docker version
+        "${{ matrix.runtime-path }}" --version
     - name: Pre-pull test image
       run: docker pull alpine:3.20
     - name: Run integration tests
       env:
         OCI_INTERCEPTOR_INTEGRATION: "1"
+        OCI_INTERCEPTOR_RUNTIME_PATH: ${{ matrix.runtime-path }}
       run: cargo test --test integration -- --test-threads=1 --nocapture
     - name: Upload debug output on failure
       if: failure()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
-        name: oci-interceptor-debug-output
+        name: oci-interceptor-debug-output-${{ matrix.runtime }}
         path: /tmp/oi-interceptor-debug/
         if-no-files-found: ignore
